@@ -93,12 +93,41 @@ You ask clarifying questions when needed."""
     # Validation
     # ----------
     @classmethod
+    def configured_providers(cls):
+        """
+        Return the providers that have API keys configured.
+        """
+        providers = []
+
+        if cls.OPENAI_API_KEY:
+            providers.append("openai")
+        if cls.ANTHROPIC_API_KEY:
+            providers.append("anthropic")
+        if cls.GEMINI_API_KEY:
+            providers.append("gemini")
+
+        return providers
+
+    @classmethod
+    def default_provider(cls):
+        """
+        Return the first configured provider to use as the initial default.
+        """
+        providers = cls.configured_providers()
+        if not providers:
+            raise ValueError(
+                "No API key found! Set OPENAI_API_KEY, ANTHROPIC_API_KEY, or GEMINI_API_KEY "
+                "in .env file or environment variables."
+            )
+        return providers[0]
+
+    @classmethod
     def validate(cls):
         """
         Validate configuration before starting app
         CONVENTION: Fail fast if config is invalid
         """
-        if not cls.OPENAI_API_KEY and not cls.ANTHROPIC_API_KEY and not cls.GEMINI_API_KEY:
+        if not cls.configured_providers():
             raise ValueError(
                 "No API key found! Set OPENAI_API_KEY, ANTHROPIC_API_KEY, or GEMINI_API_KEY "
                 "in .env file or environment variables."

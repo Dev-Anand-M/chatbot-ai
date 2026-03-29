@@ -30,6 +30,12 @@ import streamlit as st
 from chatbot_core import ChatbotCore
 from config import Config
 
+PROVIDER_LABELS = {
+    "openai": "OpenAI",
+    "anthropic": "Anthropic",
+    "gemini": "Gemini",
+}
+
 
 # ============================================================================
 # STEP 3.1: Page Configuration
@@ -66,7 +72,11 @@ def initialize_session_state():
     # IMPORTANT: Only create once, reuse across reruns
     if "chatbot" not in st.session_state:
         try:
-            provider = st.session_state.get("provider", "openai")
+            available_providers = Config.configured_providers()
+            provider = st.session_state.get("provider")
+            if provider not in available_providers:
+                provider = Config.default_provider()
+            st.session_state.provider = provider
             st.session_state.chatbot = ChatbotCore(provider=provider)
         except Exception as e:
             st.error(f"Failed to initialize chatbot: {e}")
@@ -93,13 +103,14 @@ initialize_session_state()
 # CONVENTION: Settings, info, and actions in sidebar
 
 with st.sidebar:
+    available_providers = Config.configured_providers()
     st.header("⚙️ Settings")
 
     # Provider selector
     provider = st.selectbox(
         "AI Provider",
-        options=["openai", "anthropic", "gemini"],
-        index=0
+        options=available_providers,
+        index=available_providers.index(st.session_state.provider)
     )
 
     # If provider changed, reinitialize chatbot
