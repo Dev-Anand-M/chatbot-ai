@@ -1,14 +1,9 @@
-# Core chatbot dependencies
-openai>=1.0.0          # For OpenAI API (most common)
-anthropic>=0.18.0      # For Claude API (alternative)
-google-generativeai>=0.5.0  # For Gemini API
-python-dotenv>=1.0.0   # For environment variables
-
-# GUI options (install what you need)
-streamlit>=1.30.0      # Web-based GUI (easiest, most popular)
-gradio>=4.0.0          # Alternative web GUI (simpler than Streamlit)
-flask>=3.0.0           # For custom web interface
-requests>=2.31.0       # For API calls
-
-# Optional but recommended
-tiktoken>=0.5.0        # Token counting for OpenAI
+openai>=1.0.0
+anthropic>=0.18.0
+google-generativeai>=0.5.0
+python-dotenv>=1.0.0
+streamlit>=1.30.0
+gradio>=4.0.0
+flask>=3.0.0
+requests>=2.31.0
+tiktoken>=0.5.0
