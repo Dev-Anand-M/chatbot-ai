@@ -6,8 +6,8 @@ The project is simple at its core:
 
 1. `config.py` loads settings and API keys.
 2. `chatbot_core.py` stores conversation history and talks to the AI API.
-3. `app_streamlit.py` shows the chatbot in Streamlit.
-4. `app_gradio.py` shows the same chatbot idea in Gradio.
+3. `app_streamlit.py` shows the chatbot in Streamlit and lets you switch between OpenAI, Anthropic, and Gemini.
+4. `app_gradio.py` shows the same chatbot idea in Gradio, but it is still fixed to OpenAI in the current code.
 
 Think of it like a small restaurant:
 
@@ -21,9 +21,9 @@ Think of it like a small restaurant:
 Here is the full folder, in plain English:
 
 - `config.py`: Central settings. API keys, model name, system prompt, limits, app title.
-- `chatbot_core.py`: The actual chatbot brain. Holds messages and calls OpenAI or Anthropic.
-- `app_streamlit.py`: Streamlit chat app. Best choice in this repo for a normal beginner demo.
-- `app_gradio.py`: Gradio chat app. Simpler event-based alternative.
+- `chatbot_core.py`: The actual chatbot brain. Holds messages and calls OpenAI, Anthropic, or Gemini.
+- `app_streamlit.py`: Streamlit chat app. Best choice in this repo for a normal beginner demo, and the only UI here that exposes provider switching.
+- `app_gradio.py`: Gradio chat app. Simpler event-based alternative, but still hardcoded to OpenAI.
 - `.env.example`: Template showing what secrets/settings belong in `.env`.
 - `requirements.txt`: Python packages to install.
 - `1_simple_chatbot.py`: Empty file. Placeholder only. No code inside.
@@ -48,7 +48,7 @@ This is the actual runtime flow:
 4. `ChatbotCore` starts the conversation with one hidden system message.
 5. The user types a message.
 6. That message is added to history.
-7. `ChatbotCore` sends the history to OpenAI or Anthropic.
+7. `ChatbotCore` sends the history to OpenAI, Anthropic, or Gemini.
 8. The API sends back a reply.
 9. The reply is added to history.
 10. The UI displays the reply.
@@ -119,12 +119,14 @@ This is a building noticeboard. Everyone reads from the same board.
 ```python
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 ```
 
 This asks the environment:
 
 - "Do you have an OpenAI key?"
 - "Do you have an Anthropic key?"
+- "Do you have a Gemini key?"
 
 If yes, the values are stored.
 If no, they become `None`.
@@ -145,6 +147,9 @@ This means:
 
 Real-life analogy:
 "Use the special instructions if the manager left them; otherwise use the default plan."
+
+Important nuance:
+In the current code, `MODEL_NAME` is used for OpenAI. Anthropic and Gemini models are hardcoded inside `chatbot_core.py`.
 
 ### 3.6 Response settings
 
@@ -220,7 +225,7 @@ Important note:
 ```python
 @classmethod
 def validate(cls):
-    if not cls.OPENAI_API_KEY and not cls.ANTHROPIC_API_KEY:
+    if not cls.OPENAI_API_KEY and not cls.ANTHROPIC_API_KEY and not cls.GEMINI_API_KEY:
         raise ValueError(...)
 ```
 
@@ -267,10 +272,11 @@ This file contains the actual chatbot logic. The UI files are just wrappers arou
 from typing import List, Dict, Optional
 from openai import OpenAI
 from anthropic import Anthropic
+import google.generativeai as genai
 from config import Config
 ```
 
-- `OpenAI` and `Anthropic` are API client libraries.
+- `OpenAI`, `Anthropic`, and `google.generativeai` are API client libraries.
 - `Config` provides settings.
 - `List` and `Dict` are type hints.
 - `Optional` is imported but not used in the current file.
@@ -317,6 +323,8 @@ if provider == "openai":
     ...
 elif provider == "anthropic":
     ...
+elif provider == "gemini":
+    ...
 else:
     raise ValueError(...)
 ```
@@ -335,12 +343,19 @@ If provider is `"anthropic"`:
 - create `Anthropic(...)`
 - hardcode the Anthropic model name
 
+If provider is `"gemini"`:
+
+- require `GEMINI_API_KEY`
+- configure the Google Gemini SDK
+- create a `GenerativeModel(...)`
+- hardcode the Gemini model name
+
 If provider is something else:
 
 - reject it immediately
 
 Important beginner nuance:
-The current UI files both hardcode `provider="openai"`, so Anthropic support exists in the core but is not exposed in the actual UI.
+The Streamlit UI exposes all three providers through a dropdown. The Gradio UI is still hardcoded to `provider="openai"`.
 
 ### 4.5 Hidden conversation start
 
@@ -488,7 +503,36 @@ Then it calls `self.client.messages.create(...)`.
 
 Same idea, different API shape.
 
-### 4.11 Reset, count, export
+### 4.11 Gemini response helper
+
+Gemini works differently from both OpenAI and Anthropic.
+
+The current code does three Gemini-specific things:
+
+1. It sets the system prompt when creating the Gemini model, not inside the message list.
+2. It converts assistant messages to the Gemini role name `"model"`.
+3. It starts a chat session with past history, then sends only the newest user message.
+
+The key conversion code is conceptually:
+
+```python
+gemini_history.append({
+    "role": "user" if msg["role"] == "user" else "model",
+    "parts": [msg["content"]]
+})
+```
+
+Why convert `"assistant"` to `"model"`?
+
+Because Gemini uses different role names than OpenAI-style chat history.
+
+Real-life analogy:
+It is the same conversation, but you have to rewrite it into the other company's form before they accept it.
+
+Another important detail:
+The code skips the system message when building Gemini history because Gemini already got the system instruction earlier when `GenerativeModel(...)` was created.
+
+### 4.12 Reset, count, export
 
 These smaller methods are utility helpers:
 
@@ -502,7 +546,7 @@ Real-life analogy:
 - count = check how many public messages happened
 - export = photocopy the notebook
 
-### 4.12 The test block
+### 4.13 The test block
 
 ```python
 if __name__ == "__main__":
@@ -589,7 +633,8 @@ Important beginner note:
 ```python
 if "chatbot" not in st.session_state:
     try:
-        st.session_state.chatbot = ChatbotCore(provider="openai")
+        provider = st.session_state.get("provider", "openai")
+        st.session_state.chatbot = ChatbotCore(provider=provider)
     except Exception as e:
         st.error(f"Failed to initialize chatbot: {e}")
         st.stop()
@@ -615,6 +660,11 @@ Why this matters:
 - the conversation survives reruns
 - the API client is not recreated every time
 - the user experience feels like one continuous chat
+
+Default behavior:
+
+- first launch uses `"openai"` unless a provider is already stored in session state
+- after that, Streamlit reuses whichever provider the user selected
 
 Why the `try/except`?
 
@@ -674,11 +724,39 @@ Everything inside appears in the side panel.
 
 What it contains:
 
+- provider selector
 - settings summary
 - message count metric
 - clear conversation button
 - help section
 - debug section
+
+#### Provider selector
+
+The biggest new change in this file is:
+
+```python
+provider = st.selectbox(
+    "AI Provider",
+    options=["openai", "anthropic", "gemini"],
+    index=0
+)
+```
+
+This gives the user a dropdown in the sidebar.
+
+What happens when the user changes it:
+
+1. the new provider is saved in `st.session_state.provider`
+2. a new `ChatbotCore(provider=provider)` is created
+3. visible chat messages are cleared
+
+Why clear the messages when switching providers?
+
+Because one provider's conversation object should not pretend to be another provider's ongoing conversation.
+
+Real-life analogy:
+If you switch from one doctor to another, you may start a fresh appointment instead of acting like the new doctor personally heard the earlier conversation.
 
 #### Settings summary
 
@@ -686,7 +764,7 @@ What it contains:
 st.info(...)
 ```
 
-This simply shows the current model, temperature, and history limit.
+This now shows the current model from the actual chatbot object, so the displayed model changes when you switch provider.
 
 #### Message count
 
@@ -733,6 +811,7 @@ You need to clear both the back-office notebook and the public whiteboard.
 
 - Help explains how to use the app.
 - Debug shows provider, model, message count, and raw history length.
+- That is especially useful now because you can confirm whether you are on OpenAI, Anthropic, or Gemini.
 
 The debug section is useful for learning because it exposes the internal state.
 
@@ -874,6 +953,9 @@ Real-life analogy:
 Instead of giving each customer a separate notebook, everyone writes into the same notebook on the counter.
 
 So this file is good for a simple demo, but not the best multi-user design.
+
+Important current-state note:
+Unlike Streamlit, this file still creates `ChatbotCore(provider="openai")`. So Gradio does not yet expose Anthropic or Gemini.
 
 ### 6.2 Startup failure handling
 
@@ -1040,6 +1122,7 @@ The file contains these packages:
 
 - `openai`: used now
 - `anthropic`: used now if you switch provider
+- `google-generativeai`: used now for Gemini
 - `python-dotenv`: used now
 - `streamlit`: used now
 - `gradio`: used now
@@ -1063,6 +1146,7 @@ It shows:
 
 - `OPENAI_API_KEY`
 - `ANTHROPIC_API_KEY`
+- `GEMINI_API_KEY`
 - `MODEL_NAME`
 
 Why keep `.env.example` but not commit real `.env`?
@@ -1185,6 +1269,12 @@ For beginners, run:
 streamlit run app_streamlit.py
 ```
 
+Why this is the better default now:
+
+- it exposes provider switching
+- you can test OpenAI, Anthropic, and Gemini from one UI
+- it handles per-session chatbot state better
+
 Use Gradio only if you specifically want the alternative interface:
 
 ```bash
@@ -1197,7 +1287,7 @@ python app_gradio.py
 2. `ChatbotCore` is the real chatbot; the UI files are only wrappers.
 3. The system prompt is the hidden instruction that defines behavior.
 4. Streamlit needs `st.session_state` because the script reruns on every interaction.
-5. Gradio's current version uses one global chatbot instance, so it is demo-friendly but not ideal for multi-user use.
+5. Streamlit now lets you switch between OpenAI, Anthropic, and Gemini, while Gradio still uses one global OpenAI chatbot instance.
 
 ## 13. Recommended Reading Order
 
@@ -1214,4 +1304,4 @@ That order goes from concept -> setup -> brain -> UI.
 
 ## 14. Final Summary in One Paragraph
 
-This repo is a small chatbot application with one shared backend idea and two UI choices. `config.py` defines the rules, `chatbot_core.py` stores the conversation and calls the AI model, `app_streamlit.py` wraps that logic in a session-based Streamlit interface, and `app_gradio.py` wraps it in a callback-based Gradio interface. The rest of the files are setup templates or duplicated documentation around that same core idea. If you understand those four Python files and the difference between config, state, and UI, you understand this project.
+This repo is a small chatbot application with one shared backend idea and two UI choices. `config.py` defines the rules, `chatbot_core.py` stores the conversation and can call OpenAI, Anthropic, or Gemini, `app_streamlit.py` wraps that logic in a session-based Streamlit interface with provider switching, and `app_gradio.py` wraps it in a callback-based Gradio interface that is still fixed to OpenAI. The rest of the files are setup templates or duplicated documentation around that same core idea. If you understand those four Python files and the difference between config, state, provider, and UI, you understand this project.
