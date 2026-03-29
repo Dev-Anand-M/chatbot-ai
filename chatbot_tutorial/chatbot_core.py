@@ -17,6 +17,7 @@ CONVENTIONAL ARCHITECTURE:
 from typing import List, Dict, Optional
 from openai import OpenAI
 from anthropic import Anthropic
+import google.generativeai as genai
 from config import Config
 
 
@@ -59,6 +60,16 @@ class ChatbotCore:
                 raise ValueError("Anthropic API key not found")
             self.client = Anthropic(api_key=Config.ANTHROPIC_API_KEY)
             self.model = "claude-3-sonnet-20240229"
+        elif provider == "gemini":
+            if not Config.GEMINI_API_KEY:
+                raise ValueError("Gemini API key not found")
+            genai.configure(api_key=Config.GEMINI_API_KEY)
+            self.model = "gemini-2.5-flash"
+            # Gemini uses its own client per model
+            self.client = genai.GenerativeModel(
+                model_name=self.model,
+                system_instruction=Config.SYSTEM_PROMPT
+            )
         else:
             raise ValueError(f"Unknown provider: {provider}")
         
@@ -143,6 +154,8 @@ class ChatbotCore:
                 response = self._get_openai_response()
             elif self.provider == "anthropic":
                 response = self._get_anthropic_response()
+            elif self.provider == "gemini":
+                response = self._get_gemini_response()
             else:
                 raise ValueError(f"Unknown provider: {self.provider}")
             
@@ -218,6 +231,38 @@ class ChatbotCore:
         # Extract text from response
         # STRUCTURE: response.content[0].text
         return response.content[0].text
+
+    def _get_gemini_response(self) -> str:
+        """
+        Get response from Google Gemini API
+
+        API STRUCTURE (Gemini):
+        - Uses chat session (start_chat)
+        - History format uses "user"/"model" roles (not "assistant")
+        - send_message() sends latest message
+
+        KEY DIFFERENCE FROM OPENAI:
+        - Role is "model" instead of "assistant"
+        - History passed when starting chat session
+        - System prompt set at model level (not in messages)
+        """
+        # Gemini uses "model" instead of "assistant" as role name
+        # Convert our history (skip system message at index 0)
+        gemini_history = []
+        for msg in self.messages[1:-1]:  # skip system + last user message
+            gemini_history.append({
+                "role": "user" if msg["role"] == "user" else "model",
+                "parts": [msg["content"]]
+            })
+
+        # Start chat session with history
+        chat = self.client.start_chat(history=gemini_history)
+
+        # Send the latest user message
+        last_user_message = self.messages[-1]["content"]
+        response = chat.send_message(last_user_message)
+
+        return response.text
     
     def reset_conversation(self):
         """

@@ -39,6 +39,7 @@ class Config:
     # CONVENTION: Always use environment variables for API keys
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
     ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
+    GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
     
     # Model Selection
     # ---------------
@@ -97,9 +98,9 @@ You ask clarifying questions when needed."""
         Validate configuration before starting app
         CONVENTION: Fail fast if config is invalid
         """
-        if not cls.OPENAI_API_KEY and not cls.ANTHROPIC_API_KEY:
+        if not cls.OPENAI_API_KEY and not cls.ANTHROPIC_API_KEY and not cls.GEMINI_API_KEY:
             raise ValueError(
-                "No API key found! Set OPENAI_API_KEY or ANTHROPIC_API_KEY "
+                "No API key found! Set OPENAI_API_KEY, ANTHROPIC_API_KEY, or GEMINI_API_KEY "
                 "in .env file or environment variables."
             )
         return True

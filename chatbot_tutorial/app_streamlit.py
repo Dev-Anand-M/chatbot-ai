@@ -66,7 +66,8 @@ def initialize_session_state():
     # IMPORTANT: Only create once, reuse across reruns
     if "chatbot" not in st.session_state:
         try:
-            st.session_state.chatbot = ChatbotCore(provider="openai")
+            provider = st.session_state.get("provider", "openai")
+            st.session_state.chatbot = ChatbotCore(provider=provider)
         except Exception as e:
             st.error(f"Failed to initialize chatbot: {e}")
             st.stop()  # Stop execution if initialization fails
@@ -93,11 +94,27 @@ initialize_session_state()
 
 with st.sidebar:
     st.header("⚙️ Settings")
-    
+
+    # Provider selector
+    provider = st.selectbox(
+        "AI Provider",
+        options=["openai", "anthropic", "gemini"],
+        index=0
+    )
+
+    # If provider changed, reinitialize chatbot
+    if st.session_state.get("provider") != provider:
+        st.session_state.provider = provider
+        try:
+            st.session_state.chatbot = ChatbotCore(provider=provider)
+            st.session_state.messages = []
+        except Exception as e:
+            st.error(f"Failed to switch provider: {e}")
+
     # Display current configuration
     # PATTERN: Show user what settings are active
     st.info(f"""
-    **Model:** {Config.MODEL_NAME}  
+    **Model:** {st.session_state.chatbot.model}  
     **Temperature:** {Config.TEMPERATURE}  
     **Max History:** {Config.MAX_HISTORY} messages
     """)
@@ -161,16 +178,14 @@ st.caption("Powered by OpenAI GPT • Built with Streamlit")
 # CONVENTION: Use st.chat_message for proper formatting
 
 for message in st.session_state.messages:
-    """
-    CHAT MESSAGE STRUCTURE:
-    - role: "user" or "assistant"
-    - content: message text
-    
-    st.chat_message() provides:
-    - Proper avatar (user/assistant icon)
-    - Message bubble styling
-    - Consistent formatting
-    """
+    # CHAT MESSAGE STRUCTURE:
+    # - role: "user" or "assistant"
+    # - content: message text
+    #
+    # st.chat_message() provides:
+    # - Proper avatar (user/assistant icon)
+    # - Message bubble styling
+    # - Consistent formatting
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
@@ -184,20 +199,18 @@ for message in st.session_state.messages:
 user_input = st.chat_input("Type your message here...")
 
 if user_input:
-    """
-    INPUT FLOW:
-    1. User types and presses Enter
-    2. Display user message immediately
-    3. Add to chatbot history
-    4. Get AI response
-    5. Display AI response
-    6. Update session state
-    
-    WHY THIS ORDER?
-    - Immediate feedback (user sees their message)
-    - Progressive disclosure (show thinking state)
-    - Error handling at each step
-    """
+    # INPUT FLOW:
+    # 1. User types and presses Enter
+    # 2. Display user message immediately
+    # 3. Add to chatbot history
+    # 4. Get AI response
+    # 5. Display AI response
+    # 6. Update session state
+    #
+    # WHY THIS ORDER?
+    # - Immediate feedback (user sees their message)
+    # - Progressive disclosure (show thinking state)
+    # - Error handling at each step
     
     # Display user message immediately
     # PATTERN: Optimistic UI update
@@ -264,32 +277,30 @@ with col3:
 # ============================================================================
 # HOW TO RUN THIS APP
 # ============================================================================
-"""
-COMMAND:
-    streamlit run app_streamlit.py
-
-WHAT HAPPENS:
-1. Streamlit starts local web server
-2. Opens browser automatically
-3. Runs this script
-4. Watches for file changes (auto-reload)
-
-STREAMLIT FEATURES USED:
-- st.set_page_config() - Page settings
-- st.session_state - Data persistence
-- st.sidebar - Side panel
-- st.chat_message() - Chat bubbles
-- st.chat_input() - Input widget
-- st.spinner() - Loading indicator
-- st.button() - Interactive button
-- st.rerun() - Force refresh
-
-CONVENTIONAL PATTERNS:
-✅ Session state for persistence
-✅ Sidebar for settings
-✅ Chat messages for display
-✅ Error handling with try-except
-✅ Loading indicators for API calls
-✅ Clear button for reset
-✅ Help section for users
-"""
+# COMMAND:
+#     streamlit run app_streamlit.py
+#
+# WHAT HAPPENS:
+# 1. Streamlit starts local web server
+# 2. Opens browser automatically
+# 3. Runs this script
+# 4. Watches for file changes (auto-reload)
+#
+# STREAMLIT FEATURES USED:
+# - st.set_page_config() - Page settings
+# - st.session_state - Data persistence
+# - st.sidebar - Side panel
+# - st.chat_message() - Chat bubbles
+# - st.chat_input() - Input widget
+# - st.spinner() - Loading indicator
+# - st.button() - Interactive button
+# - st.rerun() - Force refresh
+#
+# CONVENTIONAL PATTERNS:
+# - Session state for persistence
+# - Sidebar for settings
+# - Chat messages for display
+# - Error handling with try-except
+# - Loading indicators for API calls
+# - Clear button for reset
+# - Help section for users
